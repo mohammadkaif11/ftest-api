@@ -92,8 +92,8 @@ app.post("/ftest-input", async (req, res, next) => {
     const newFtest = await prisma.ftest.create({
       data: {
         Name: ftest.Name,
-        Header: ftest.HeaderContent,
-        Content: ftest.HeaderDescription,
+        HeaderContent: ftest.HeaderContent,
+        HeaderDescription: ftest.HeaderDescription,
         labels: { createMany: { data: labels } },
         stats: { createMany: { data: stats } },
         feature: {
