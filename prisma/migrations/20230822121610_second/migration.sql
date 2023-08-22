@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Stats" ALTER COLUMN "Value" SET DATA TYPE TEXT;

@@ -1,0 +1,63 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Ftest {
+  id       Int      @id @default(autoincrement())
+  Name     String
+  Header   String
+  Content  String
+  labels   Label[]
+  stats    Stats[]
+  feature  Feature?
+  cta      Cta?
+}
+
+model Label {
+  id      Int     @id @default(autoincrement())
+  ftestId Int
+  Label   String
+  ftest   Ftest   @relation(fields: [ftestId], references: [id])
+}
+
+model Stats {
+  id     Int    @id @default(autoincrement())
+  festId Int
+  Name   String
+  Value  String
+  ftest  Ftest  @relation(fields: [festId], references: [id])
+}
+
+model Feature {
+  id          Int     @id @default(autoincrement())
+  festId      Int     @unique
+  Tag         String
+  Header      String
+  Description String
+  ftest       Ftest   @relation(fields: [festId], references: [id])
+  featureNameAndDescriptions FeatureNameAndDescription[]
+}
+
+model FeatureNameAndDescription {
+  id          Int     @id @default(autoincrement())
+  FeatureId   Int
+  Name        String
+  Description String
+  feature     Feature @relation(fields: [FeatureId], references: [id])
+}
+
+model Cta {
+  id          Int  @id @default(autoincrement())
+  festId      Int  @unique
+  Header      String
+  Description String
+  ftest       Ftest @relation(fields: [festId], references: [id])
+}
