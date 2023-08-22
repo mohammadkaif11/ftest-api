@@ -1,13 +1,14 @@
+require("dotenv").config();
 const express = require("express");
 const bodyParser = require("body-parser");
 const app = express();
 const port = process.env.PORT || 4000;
 const { Octokit } = require("octokit");
 const { PrismaClient } = require("@prisma/client");
-require("dotenv").config();
+const cors = require('cors'); 
 
 const prisma = new PrismaClient();
-
+app.use(cors());
 app.use(bodyParser.json());
 
 app.post("/ftest-input", async (req, res, next) => {
@@ -119,12 +120,54 @@ app.post("/ftest-input", async (req, res, next) => {
       },
     });
 
-    res.json(newFtest);
+    //Github Repository
+    if(newFtest){
+        GitHubCreateRepo(newFtest.Name);
+    }
+
+    res.json({data:newFtest,msg:"successfully created"});
   } catch (error) {
     console.error("Error:", error);
     res.status(500).json({ error: "An error occurred" });
   }
 });
+
+// ...
+
+// Get Ftest by Name
+app.get('/ftests/:name', async (req, res) => {
+  try {
+    const ftestName = req.params.name;
+
+    const foundFtest = await prisma.ftest.findMany({
+      where: {
+        Name: ftestName
+      },
+      include: {
+        labels: true,
+        stats: true,
+        feature: {
+          include: {
+            featureNameAndDescriptions: true
+          }
+        },
+        cta: true
+      }
+    });
+
+    if (!foundFtest) {
+      return res.status(404).json({ message: 'Ftest not found' });
+    }
+
+    res.json(foundFtest);
+  } catch (error) {
+    console.error('Error fetching Ftest:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ...
+
 
 const GitHubCreateRepo = async (RepoName) => {
   try {
@@ -149,7 +192,7 @@ const GitHubCreateRepo = async (RepoName) => {
       }
     );
     if (data.status == 200 || (data.status == 201 && data != null)) {
-      //Call the api after 5secs 
+      //Call the api after 5seconds
       setTimeout(async () => {
         const ChangeData = {
           Name: repoName,
