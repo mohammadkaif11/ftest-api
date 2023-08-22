@@ -13,8 +13,8 @@ datasource db {
 model Ftest {
   id       Int      @id @default(autoincrement())
   Name     String
-  Header   String
-  Content  String
+  HeaderContent   String
+  HeaderDescription  String
   labels   Label[]
   stats    Stats[]
   feature  Feature?
