@@ -141,6 +141,8 @@ app.post("/ftest-input", async (req, res, next) => {
         console.log("Error while creating github repo ");
         res.json({ data: null, msg: "failed creating github repo" });
       }
+    }else{
+      res.json({ data: newFtest, msg: "failed created" });
     }
     res.json({ data: newFtest, msg: "successfully created" });
   } catch (error) {
