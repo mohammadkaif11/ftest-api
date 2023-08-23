@@ -5,12 +5,13 @@ const app = express();
 const port = process.env.PORT || 4000;
 const { Octokit } = require("octokit");
 const { PrismaClient } = require("@prisma/client");
-const cors = require('cors'); 
+const cors = require("cors");
 
 const prisma = new PrismaClient();
 app.use(cors());
 app.use(bodyParser.json());
 
+//ftest/:name git input
 app.post("/ftest-input", async (req, res, next) => {
   try {
     let ftest = {
@@ -120,54 +121,65 @@ app.post("/ftest-input", async (req, res, next) => {
       },
     });
 
-    //Github Repository
-    if(newFtest){
-        GitHubCreateRepo(newFtest.Name);
-    }
+    const RepoName = newFtest.Name;
 
-    res.json({data:newFtest,msg:"successfully created"});
+    //Cloning Github Repository
+    if (newFtest) {
+      const data = await GitHubCreateRepo(RepoName);
+      //Deploy service and commit changes
+      if (data.status == 200 || data.status == 201) {
+        setTimeout(async () => {
+          const data = await DeployService(RepoName);
+          if (data.status == 200) {
+            await PushCommitted(RepoName);
+          } else {
+            console.log("failed to deploy service");
+            res.json({ data: null, msg: "failed to deploy service" });
+          }
+        }, 5000);
+      } else {
+        console.log("Error while creating github repo ");
+        res.json({ data: null, msg: "failed creating github repo" });
+      }
+    }
+    res.json({ data: newFtest, msg: "successfully created" });
   } catch (error) {
     console.error("Error:", error);
     res.status(500).json({ error: "An error occurred" });
   }
 });
 
-// ...
-
 // Get Ftest by Name
-app.get('/ftests/:name', async (req, res) => {
+app.get("/ftests/:name", async (req, res) => {
   try {
     const ftestName = req.params.name;
 
     const foundFtest = await prisma.ftest.findMany({
       where: {
-        Name: ftestName
+        Name: ftestName,
       },
       include: {
         labels: true,
         stats: true,
         feature: {
           include: {
-            featureNameAndDescriptions: true
-          }
+            featureNameAndDescriptions: true,
+          },
         },
-        cta: true
-      }
+        cta: true,
+      },
     });
 
     if (!foundFtest) {
-      return res.status(404).json({ message: 'Ftest not found' });
+      return res.status(404).json({ message: "Ftest not found" });
     }
 
     res.json(foundFtest);
   } catch (error) {
-    console.error('Error fetching Ftest:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error("Error fetching Ftest:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
-
-// ...
-
 
 const GitHubCreateRepo = async (RepoName) => {
   try {
@@ -191,46 +203,91 @@ const GitHubCreateRepo = async (RepoName) => {
         },
       }
     );
-    if (data.status == 200 || (data.status == 201 && data != null)) {
-      //Call the api after 5seconds
-      setTimeout(async () => {
-        const ChangeData = {
-          Name: repoName,
-        };
-        const path = "data.json";
-        const content = Buffer.from(JSON.stringify(ChangeData)).toString(
-          "base64"
-        );
 
-        // If the file already exists, you need to provide the sha in order to update the file content.
-        const file = await octokit.rest.repos.getContent({
-          owner: ownerName,
-          repo: repoName,
-          path: path,
-          branch: "main",
-        });
-
-        const { sha } = file.data;
-        const fileContent = await octokit.rest.repos.createOrUpdateFileContents(
-          {
-            owner: ownerName,
-            repo: repoName,
-            path: path,
-            sha: sha,
-            message: "This is the commit message generated via GitHub API",
-            content,
-          }
-        );
-
-        const {
-          commit: { html_url },
-        } = fileContent.data;
-
-        console.log(`Content updated, see changes at ${html_url}`);
-      }, 5000);
-    }
+    console.log(
+      "successfullly created repo with name: " + JSON.stringify(RepoName)
+    );
+    return data;
   } catch (error) {
+    console.log("Failed created repo with name: " + JSON.stringify(RepoName));
     console.log("error: ", error);
+  }
+};
+
+const DeployService = async (RepoName) => {
+  const TeamId = process.env.VERCEL_TEAM;
+  const Token = process.env.VERCEL_TOKEN;
+
+  const BodyData = {
+    name: RepoName.toLowerCase(),
+    buildCommand: "npm run build",
+    framework: "nextjs",
+    gitRepository: {
+      repo: RepoName,
+      type: "github",
+    },
+    installCommand: "npm install",
+    publicSource: true,
+  };
+
+  try {
+    const data = await fetch(
+      `https://api.vercel.com/v9/projects?teamId=${TeamId}`,
+      {
+        body: JSON.stringify(BodyData),
+        headers: {
+          Authorization: `Bearer ${Token}`,
+          "Content-Type": "application/json",
+        },
+        method: "post",
+      }
+    );
+    console.log("application successfully deployed ", data);
+    return data;
+  } catch (error) {
+    console.log("application failed to deployed ", error);
+  }
+};
+
+const PushCommitted = async (RepoName) => {
+  try {
+    const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+    const ownerName = process.env.GITHUB_OWNER;
+    const repoName = RepoName;
+    const octokit = new Octokit({ auth: GITHUB_TOKEN });
+
+    const ChangeData = {
+      Name: repoName,
+    };
+    const path = "data.json";
+    const content = Buffer.from(JSON.stringify(ChangeData)).toString("base64");
+
+    // If the file already exists, you need to provide the sha in order to update the file content.
+    const file = await octokit.rest.repos.getContent({
+      owner: ownerName,
+      repo: repoName,
+      path: path,
+      branch: "main",
+    });
+
+    const { sha } = file.data;
+    const fileContent = await octokit.rest.repos.createOrUpdateFileContents({
+      owner: ownerName,
+      repo: repoName,
+      path: path,
+      sha: sha,
+      message: "This is the commit message generated via GitHub API",
+      content,
+    });
+
+    const {
+      commit: { html_url },
+    } = fileContent.data;
+
+    console.log(`Content updated, see changes at ${html_url}`);
+    console.log("sucessfully committed");
+  } catch (error) {
+    console.log("Error while committing ", error);
   }
 };
 
